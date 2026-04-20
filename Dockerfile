@@ -6,10 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY tsp_app/requirements.txt ./requirements.txt
+COPY mtsp_app/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY tsp_app/ ./
+COPY mtsp_app/ ./
 
 EXPOSE 8000
 

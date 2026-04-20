@@ -4,6 +4,6 @@ __pycache__
 *.pyc
 *.pyo
 *.pyd
-tsp_app/.venv
-tsp_app/__pycache__
-tsp_app/**/*.pyc
+mtsp_app/.venv
+mtsp_app/__pycache__
+mtsp_app/**/*.pyc
