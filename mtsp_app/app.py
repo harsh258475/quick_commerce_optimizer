@@ -121,7 +121,7 @@ async def solve_mtsp_tw(request: Request):
     n_riders = int(data.get("n_riders", DEFAULT_RIDERS))
     service_min = float(data.get("service_min", 2.0))
     allow_late = bool(data.get("allow_late", True))
-    late_penalty = float(data.get("late_penalty", 25.0))
+    late_penalty = float(data.get("late_penalty", 5.0))
 
     max_orders = min(MAX_ORDERS_FOR_WEB, len(state["orders"]))
     if n_orders < 1 or n_orders > max_orders:
