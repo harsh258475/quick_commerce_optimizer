@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Commerce Route Optimization</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main class="app-shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Quick commerce routing</p>
+                <h1>Quick Commerce Route Optimization</h1>
+                <p class="subhead">Assign orders to multiple riders while respecting capacity, shifts, order release times, promised delivery windows, route kilometers, and delivery value.</p>
+            </div>
+            <div class="dataset-pill">
+                <span>{{ available_orders }} orders</span>
+                <span>{{ available_riders }} riders</span>
+            </div>
+        </header>
+
+        <section class="control-band">
+            <div class="field">
+                <label for="orderCount">Orders to route</label>
+                <input id="orderCount" type="number" min="1" max="{{ max_orders }}" value="{{ default_orders }}">
+                <small>Use 1 to {{ max_orders }} orders from the dataset.</small>
+            </div>
+            <div class="field">
+                <label for="riderCount">Riders available</label>
+                <input id="riderCount" type="number" min="1" max="{{ available_riders }}" value="{{ default_riders }}">
+                <small>Each rider has capacity 4 and a 0-240 minute shift.</small>
+            </div>
+            <div class="field">
+                <label for="serviceMin">Service minutes per stop</label>
+                <input id="serviceMin" type="number" min="0" step="0.5" value="2">
+                <small>Loading, handoff, and parking time.</small>
+            </div>
+            <div class="field">
+                <label for="latePenalty">Late penalty per minute</label>
+                <input id="latePenalty" type="number" min="0" step="1" value="25">
+                <small>Rupees charged per late minute in the objective.</small>
+            </div>
+            <label class="check-row">
+                <input id="allowLate" type="checkbox" checked>
+                Allow late deliveries with penalty
+            </label>
+            <button id="solveBtn" class="btn primary" onclick="solveProblem()">Optimize Routes</button>
+        </section>
+
+        <section class="summary-grid">
+            <div class="metric">
+                <span>Objective cost</span>
+                <strong id="objectiveMetric">-</strong>
+            </div>
+            <div class="metric">
+                <span>Travel time</span>
+                <strong id="travelMetric">-</strong>
+            </div>
+            <div class="metric">
+                <span>Route distance</span>
+                <strong id="kmMetric">-</strong>
+            </div>
+            <div class="metric">
+                <span>Late time</span>
+                <strong id="lateMetric">-</strong>
+            </div>
+            <div class="metric">
+                <span>Riders used</span>
+                <strong id="riderMetric">-</strong>
+            </div>
+        </section>
+
+        <section class="workspace">
+            <div class="map-panel">
+                <div class="section-title">
+                    <h2>Route Map</h2>
+                    <span id="statusText">Ready</span>
+                </div>
+                <svg id="routeSvg" class="route-svg" role="img" aria-label="M-TSP route map"></svg>
+            </div>
+            <aside class="route-panel">
+                <div class="section-title">
+                    <h2>Rider Routes</h2>
+                </div>
+                <div id="routeList" class="route-list">
+                    <p class="empty">Choose inputs and solve to see rider routes.</p>
+                </div>
+            </aside>
+        </section>
+
+        <section class="orders-band">
+            <div class="section-title">
+                <h2>Selected Orders</h2>
+            </div>
+            <div id="orderTable" class="table-wrap"></div>
+        </section>
+
+        <section class="data-band">
+            <div class="section-title">
+                <div>
+                    <h2>Data Explorer</h2>
+                    <p class="section-note">Inspect the CSV inputs used by the solver.</p>
+                </div>
+                <div class="tab-row" role="tablist" aria-label="Dataset tables">
+                    <button class="tab-btn active" onclick="showDataTable('orders')">Orders</button>
+                    <button class="tab-btn" onclick="showDataTable('riders')">Riders</button>
+                    <button class="tab-btn" onclick="showDataTable('travel')">Travel Times</button>
+                </div>
+            </div>
+            <div id="dataTable" class="table-wrap"></div>
+        </section>
+
+        <footer class="creator-credit">
+            Created by Harsh Kumar
+        </footer>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <script src="/static/script.js"></script>
+</body>
+</html>
