@@ -54,6 +54,18 @@ quick_commerce_optimizer/
 - `shift_start_min`
 - `shift_end_min`
 
+`travel_time.csv`
+
+- `from_id`
+- `to_id`
+- `minutes`
+
+The sample generator now creates:
+
+- `50` orders
+- `6` riders
+- a full depot/order travel-time matrix in `travel_time.csv`
+
 ## Run
 
 ```bash

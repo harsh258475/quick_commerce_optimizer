@@ -78,6 +78,17 @@ def load_riders(path: Path) -> list[dict]:
     return riders
 
 
+def load_travel_times(path: Path) -> dict[tuple[int, int], float]:
+    """Load a precomputed travel-time matrix when available."""
+    if not path.exists():
+        return {}
+
+    matrix = {}
+    for row in _load_csv(path):
+        matrix[int(row["from_id"]), int(row["to_id"])] = float(row["minutes"])
+    return matrix
+
+
 def ensure_results_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path

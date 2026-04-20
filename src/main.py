@@ -16,6 +16,7 @@ from utils import (
     finalize_open_orders,
     load_orders,
     load_riders,
+    load_travel_times,
     save_json,
     save_timeline_csv,
     summarize_results,
@@ -32,6 +33,7 @@ def run_simulation(base_dir: Path, use_sample_data: bool = False) -> dict:
 
     orders = load_orders(data_dir / "orders.csv")
     riders = load_riders(data_dir / "riders.csv")
+    travel_times = load_travel_times(data_dir / "travel_time.csv")
     config = default_config()
 
     horizon_end = max(
@@ -56,7 +58,13 @@ def run_simulation(base_dir: Path, use_sample_data: bool = False) -> dict:
         accepted_ids = set(master_solution["accepted_ids"])
         accepted_orders = [order for order in visible_orders if order["id"] in accepted_ids]
 
-        routing_solution, dropped_ids = repair_infeasible_acceptance(accepted_orders, riders, current_minute, config)
+        routing_solution, dropped_ids = repair_infeasible_acceptance(
+            accepted_orders,
+            riders,
+            current_minute,
+            config,
+            travel_times,
+        )
         if dropped_ids:
             cuts.append(build_route_cut(dropped_ids, current_minute))
 

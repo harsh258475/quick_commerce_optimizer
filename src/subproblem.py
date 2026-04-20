@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 GUROBI_RUNTIME_AVAILABLE = True
 
 
-def _build_travel_times(orders: list[dict], riders: list[dict], config: dict) -> dict:
+def _build_travel_times(orders: list[dict], config: dict, travel_time_matrix: dict | None = None) -> dict:
     depot = (0.0, 0.0)
     nodes = {0: depot}
     for order in orders:
@@ -31,11 +31,21 @@ def _build_travel_times(orders: list[dict], riders: list[dict], config: dict) ->
         for j, point_j in nodes.items():
             if i == j:
                 continue
-            travel[i, j] = travel_minutes_between(point_i, point_j, config["average_speed_kmph"])
+            if travel_time_matrix and (i, j) in travel_time_matrix:
+                travel[i, j] = travel_time_matrix[i, j]
+            else:
+                travel[i, j] = travel_minutes_between(point_i, point_j, config["average_speed_kmph"])
     return travel
 
 
-def _greedy_fallback(accepted_orders: list[dict], riders: list[dict], current_minute: int, config: dict) -> dict:
+def _greedy_fallback(
+    accepted_orders: list[dict],
+    riders: list[dict],
+    current_minute: int,
+    config: dict,
+    travel_time_matrix: dict | None = None,
+) -> dict:
+    travel = _build_travel_times(accepted_orders, config, travel_time_matrix)
     rider_state = []
     for rider in riders:
         rider_state.append(
@@ -43,6 +53,7 @@ def _greedy_fallback(accepted_orders: list[dict], riders: list[dict], current_mi
                 "rider_id": rider["id"],
                 "capacity_left": rider["capacity"],
                 "current_location": (rider["start_x"], rider["start_y"]),
+                "current_node": 0,
                 "current_minute": max(current_minute, rider["shift_start_min"]),
                 "shift_end_min": rider["shift_end_min"],
                 "route": [],
@@ -65,20 +76,21 @@ def _greedy_fallback(accepted_orders: list[dict], riders: list[dict], current_mi
             if rider["capacity_left"] < order["demand"]:
                 continue
 
-            travel = travel_minutes_between(rider["current_location"], destination, config["average_speed_kmph"])
-            arrival = rider["current_minute"] + travel
+            current_node = rider.get("current_node", 0)
+            leg_travel = travel[current_node, order["id"]]
+            arrival = rider["current_minute"] + leg_travel
             completion = arrival + config["service_minutes"]
 
             if arrival > order["promise_min"] or completion > rider["shift_end_min"]:
                 continue
 
-            score = arrival + travel
+            score = arrival + leg_travel
             if best_assignment is None or score < best_assignment["score"]:
                 best_assignment = {
                     "rider": rider,
                     "arrival": arrival,
                     "completion": completion,
-                    "travel": travel,
+                    "travel": leg_travel,
                     "score": score,
                 }
 
@@ -98,6 +110,7 @@ def _greedy_fallback(accepted_orders: list[dict], riders: list[dict], current_mi
         rider["capacity_left"] -= order["demand"]
         rider["current_minute"] = best_assignment["completion"]
         rider["current_location"] = destination
+        rider["current_node"] = order["id"]
         rider["travel_minutes"] += best_assignment["travel"]
         stop_lookup[order["id"]] = stop
 
@@ -173,7 +186,13 @@ def _extract_routes(x: dict, t: dict, orders: list[dict], riders: list[dict], tr
     return routes, stop_lookup
 
 
-def solve_routing_stage(accepted_orders: list[dict], riders: list[dict], current_minute: int, config: dict) -> dict:
+def solve_routing_stage(
+    accepted_orders: list[dict],
+    riders: list[dict],
+    current_minute: int,
+    config: dict,
+    travel_time_matrix: dict | None = None,
+) -> dict:
     """Solve the exact VRPTW routing subproblem for accepted orders."""
     global GUROBI_RUNTIME_AVAILABLE
 
@@ -181,7 +200,7 @@ def solve_routing_stage(accepted_orders: list[dict], riders: list[dict], current
         return {"routes": [], "unrouted_ids": [], "stop_lookup": {}, "travel_cost": 0.0, "solver": "empty"}
 
     if not GUROBI_AVAILABLE or not GUROBI_RUNTIME_AVAILABLE:
-        return _greedy_fallback(accepted_orders, riders, current_minute, config)
+        return _greedy_fallback(accepted_orders, riders, current_minute, config, travel_time_matrix)
 
     try:
         customers = [order["id"] for order in accepted_orders]
@@ -189,7 +208,7 @@ def solve_routing_stage(accepted_orders: list[dict], riders: list[dict], current
         rider_ids = [rider["id"] for rider in riders]
         order_lookup = {order["id"]: order for order in accepted_orders}
         rider_lookup = {rider["id"]: rider for rider in riders}
-        travel = _build_travel_times(accepted_orders, riders, config)
+        travel = _build_travel_times(accepted_orders, config, travel_time_matrix)
 
         model = gp.Model("routing_vrptw")
         model.Params.OutputFlag = 0
@@ -296,7 +315,7 @@ def solve_routing_stage(accepted_orders: list[dict], riders: list[dict], current
         model.optimize()
 
         if model.Status != GRB.OPTIMAL:
-            return _greedy_fallback(accepted_orders, riders, current_minute, config)
+            return _greedy_fallback(accepted_orders, riders, current_minute, config, travel_time_matrix)
 
         routes, stop_lookup = _extract_routes(x, t, accepted_orders, riders, travel)
         routed_ids = {stop["order_id"] for route in routes for stop in route["stops"]}
@@ -310,7 +329,7 @@ def solve_routing_stage(accepted_orders: list[dict], riders: list[dict], current
         }
     except gp.GurobiError:
         GUROBI_RUNTIME_AVAILABLE = False
-        return _greedy_fallback(accepted_orders, riders, current_minute, config)
+        return _greedy_fallback(accepted_orders, riders, current_minute, config, travel_time_matrix)
 
 
 def repair_infeasible_acceptance(
@@ -318,6 +337,7 @@ def repair_infeasible_acceptance(
     riders: list[dict],
     current_minute: int,
     config: dict,
+    travel_time_matrix: dict | None = None,
 ) -> tuple[dict, list[int]]:
     """Trim low-priority accepted orders until routing becomes feasible."""
     dropped_ids = []
@@ -327,7 +347,7 @@ def repair_infeasible_acceptance(
     )
 
     while candidate_orders:
-        solution = solve_routing_stage(candidate_orders, riders, current_minute, config)
+        solution = solve_routing_stage(candidate_orders, riders, current_minute, config, travel_time_matrix)
         if not solution["unrouted_ids"]:
             return solution, dropped_ids
 
